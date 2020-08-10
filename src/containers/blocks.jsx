@@ -6,6 +6,7 @@ import PropTypes from 'prop-types';
 import React from 'react';
 import VMScratchBlocks from '../lib/blocks';
 import VM from 'scratch-vm';
+import io from 'socket.io-client';
 
 import log from '../lib/log.js';
 import Prompt from './prompt.jsx';
@@ -25,11 +26,13 @@ import {activateColorPicker} from '../reducers/color-picker';
 import {closeExtensionLibrary, openSoundRecorder, openConnectionModal} from '../reducers/modals';
 import {activateCustomProcedures, deactivateCustomProcedures} from '../reducers/custom-procedures';
 import {setConnectionModalExtensionId} from '../reducers/connection-modal';
+import {Mutex, MutexInterface, Semaphore, SemaphoreInterface, withTimeout} from 'async-mutex';
 
 import {
     activateTab,
     SOUNDS_TAB_INDEX
 } from '../reducers/editor-tab';
+
 
 const addFunctionListener = (object, property, callback) => {
     const oldFn = object[property];
@@ -48,6 +51,9 @@ class Blocks extends React.Component {
     constructor (props) {
         super(props);
         this.ScratchBlocks = VMScratchBlocks(props.vm);
+        var _scratchBlocks = this.ScratchBlocks;
+        var _workspace = this.workspace;
+        this.UpdateSocket = io("http://localhost:3000");
         bindAll(this, [
             'attachVM',
             'detachVM',
@@ -89,13 +95,48 @@ class Blocks extends React.Component {
         this.ScratchBlocks.FieldColourSlider.activateEyedropper_ = this.props.onActivateColorPicker;
         this.ScratchBlocks.Procedures.externalProcedureDefCallback = this.props.onActivateCustomProcedures;
         this.ScratchBlocks.ScratchMsgs.setLocale(this.props.locale);
-
+        
+        this.mutex = new Mutex();
         const workspaceConfig = defaultsDeep({},
             Blocks.defaultOptions,
             this.props.options,
             {rtl: this.props.isRtl, toolbox: this.props.toolboxXML}
         );
         this.workspace = this.ScratchBlocks.inject(this.blocks, workspaceConfig);
+        var _caller = this;
+
+        var changeListener = function(e) {
+            if (e instanceof _caller.ScratchBlocks.Events.Ui) {
+                return;  // Don't mirror UI events.
+            }
+            
+            var json = e.toJson();
+            console.log("SEND UPDATE");
+            console.log(json);
+
+            _caller.UpdateSocket.emit('blocks-update', json)
+        }
+
+        this.workspace.addChangeListener(changeListener)
+        
+        this.UpdateSocket.on('blocks-update', function(updateJSON) {
+            console.log("RECV UPDATE");
+            console.log(updateJSON);
+
+            _caller.mutex
+            .acquire()
+            .then(function(release) {
+                _caller.workspace.removeChangeListener(changeListener);
+                var event = _caller.ScratchBlocks.Events.fromJson(updateJSON, _caller.workspace);
+                event.run(true);
+                setTimeout(function(){ 
+                    _caller.workspace.addChangeListener(changeListener);
+                    release();
+                }, 400);
+            });
+            
+            
+        });
 
         // Register buttons under new callback keys for creating variables,
         // lists, and procedures from extensions.
