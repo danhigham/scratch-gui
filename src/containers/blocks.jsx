@@ -51,9 +51,19 @@ class Blocks extends React.Component {
     constructor (props) {
         super(props);
         this.ScratchBlocks = VMScratchBlocks(props.vm);
-        var _scratchBlocks = this.ScratchBlocks;
-        var _workspace = this.workspace;
-        this.UpdateSocket = io("http://localhost:3000");
+        this.UpdateSocket = io({'path': '/socket'});
+
+        if (document.URL.lastIndexOf("?") > -1) {
+            var room = document.URL.split("?")[1].split("&").reduce(function(result, param) {
+                var [key, value] = param.split("=");
+                result[key] = value;
+                return result;
+            }, {})["session_name"];
+
+            console.log ('Joining room ' + room);
+            this.UpdateSocket.emit('join', room);
+        }
+
         bindAll(this, [
             'attachVM',
             'detachVM',
@@ -83,7 +93,7 @@ class Blocks extends React.Component {
         this.ScratchBlocks.prompt = this.handlePromptStart;
         this.ScratchBlocks.statusButtonCallback = this.handleConnectionModalStart;
         this.ScratchBlocks.recordSoundCallback = this.handleOpenSoundRecorder;
-
+        
         this.state = {
             workspaceMetrics: {},
             prompt: null
@@ -111,7 +121,6 @@ class Blocks extends React.Component {
             }
             
             var json = e.toJson();
-            console.log("SEND UPDATE");
             console.log(json);
 
             _caller.UpdateSocket.emit('blocks-update', json)
@@ -120,7 +129,6 @@ class Blocks extends React.Component {
         this.workspace.addChangeListener(changeListener)
         
         this.UpdateSocket.on('blocks-update', function(updateJSON) {
-            console.log("RECV UPDATE");
             console.log(updateJSON);
 
             _caller.mutex
@@ -132,7 +140,7 @@ class Blocks extends React.Component {
                 setTimeout(function(){ 
                     _caller.workspace.addChangeListener(changeListener);
                     release();
-                }, 400);
+                }, 100);
             });
             
             
