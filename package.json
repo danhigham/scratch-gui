@@ -30,7 +30,7 @@
     "react-dom": "^16.0.0"
   },
   "devDependencies": {
-    "async-mutex": "0.2.4",
+    "async-mutex": "^0.2.4",
     "@babel/cli": "^7.1.2",
     "@babel/core": "^7.1.2",
     "@babel/plugin-proposal-object-rest-spread": "^7.0.0",
@@ -145,8 +145,5 @@
       "\\.(css|less)$": "<rootDir>/test/__mocks__/styleMock.js",
       "editor-msgs(\\.js)?$": "<rootDir>/test/__mocks__/editor-msgs-mock.js"
     }
-  },
-  "dependencies": {
-    "async-mutex": "^0.2.4"
   }
 }
